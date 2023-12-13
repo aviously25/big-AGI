@@ -50,7 +50,8 @@ ENV PATH $PATH:/app/node_modules/.bin
 USER nextjs
 
 # Expose port 3000 for the application to listen on
-EXPOSE 3000
+# EXPOSE 3000
+EXPOSE $PORT
 
 # Start the application
 CMD ["next", "start"]
