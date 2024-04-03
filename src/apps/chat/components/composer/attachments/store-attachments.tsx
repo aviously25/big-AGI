@@ -2,13 +2,13 @@ import { create } from 'zustand';
 import type { FileWithHandle } from 'browser-fs-access';
 
 import type { ComposerOutputMultiPart } from '../composer.types';
-import { attachmentPerformConversion, attachmentCreate, attachmentDefineConverters, attachmentLoadInputAsync } from './pipeline';
+import { attachmentCreate, attachmentDefineConverters, attachmentLoadInputAsync, attachmentPerformConversion } from './pipeline';
 
 
 // Attachment Types
 
 export type AttachmentSourceOriginDTO = 'drop' | 'paste';
-export type AttachmentSourceOriginFile = 'camera' | 'file-open' | 'clipboard-read' | AttachmentSourceOriginDTO;
+export type AttachmentSourceOriginFile = 'camera' | 'screencapture' | 'file-open' | 'clipboard-read' | AttachmentSourceOriginDTO;
 
 export type AttachmentSource = {
   media: 'url';
@@ -24,6 +24,12 @@ export type AttachmentSource = {
   method: 'clipboard-read' | AttachmentSourceOriginDTO;
   textPlain?: string;
   textHtml?: string;
+} | {
+  media: 'ego';
+  method: 'ego-message';
+  label: string;
+  blockTitle: string;
+  textPlain: string;
 };
 
 
@@ -41,6 +47,7 @@ export type AttachmentConverterType =
   | 'text' | 'rich-text' | 'rich-text-table'
   | 'pdf-text' | 'pdf-images'
   | 'image' | 'image-ocr'
+  | 'ego-message-md'
   | 'unhandled';
 
 export type AttachmentConverter = {
@@ -62,7 +69,7 @@ export type Attachment = {
   readonly id: AttachmentId;
   readonly source: AttachmentSource,
   label: string;
-  ref: string;
+  ref: string; // will be used in ```ref\n...``` for instance
 
   inputLoading: boolean;
   inputError: string | null;

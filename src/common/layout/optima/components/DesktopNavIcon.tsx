@@ -1,6 +1,6 @@
 import { Box, IconButton, styled } from '@mui/joy';
 
-import { cssRainbowColorKeyframes } from '~/common/app.theme';
+import { animationColorBeamScatterINV } from '~/common/util/animUtils';
 
 
 export const DesktopNavGroupBox = styled(Box)({
@@ -23,8 +23,10 @@ export const DesktopNavGroupBox = styled(Box)({
 
 
 export const navItemClasses = {
+  typeMenu: 'NavButton-typeMenu',
   typeApp: 'NavButton-typeApp',
   typeLinkOrModal: 'NavButton-typeLink',
+  dev: 'NavButton-dev',
   active: 'NavButton-active',
   paneOpen: 'NavButton-paneOpen',
   attractive: 'NavButton-attractive',
@@ -40,12 +42,18 @@ export const DesktopNavIcon = styled(IconButton)(({ theme }) => ({
   padding: 0,
 
   [`&.${navItemClasses.typeApp},&.${navItemClasses.typeLinkOrModal}`]: {
+    // NOTE: 1.5 would be 24px, the native icon size - maybe we should use that for the selected app?
     '--Icon-fontSize': '1.25rem',
   },
 
-  // [`&.${navItemClasses.typeLinkOrModal}`]: {
-  //   borderRadius: '50%',
-  // },
+  // hamburger menu: quick rotate on click
+  [`&.${navItemClasses.typeMenu}`]: {
+    transition: 'rotate 0.6s',
+    '&:active': {
+      rotate: '90deg',
+      transition: 'rotate 0.2s',
+    },
+  },
 
   [`&.${navItemClasses.typeApp}`]: {
     '--IconButton-size': 'calc(var(--Bar) - 2 * var(--MarginX))',
@@ -57,6 +65,11 @@ export const DesktopNavIcon = styled(IconButton)(({ theme }) => ({
     // backgroundColor: theme.palette.neutral.softHoverBg,
     color: theme.palette.neutral.softColor,
   },
+
+  // [`&.${navItemClasses.typeLinkOrModal}`]: {
+  //   borderRadius: '50%',
+  //   transition: 'font-size 5s, color 0.2s',
+  // },
 
   // app active (non hover)
   // [`&.${navItemClasses.typeApp}.${navItemClasses.active}`]: {},
@@ -79,8 +92,13 @@ export const DesktopNavIcon = styled(IconButton)(({ theme }) => ({
 
   // attractive: attract the user to click on this element
   [`&.${navItemClasses.attractive}`]: {
-    animation: `${cssRainbowColorKeyframes} 5s infinite`,
-    transform: 'scale(1.4)',
+    '--Icon-fontSize': '2rem',
+    animation: `${animationColorBeamScatterINV} 4s infinite`,
+  },
+
+  // debug: show a red outline
+  [`&.${navItemClasses.dev}`]: {
+    border: '2px dashed red',
   },
 
 })) as typeof IconButton;

@@ -7,9 +7,11 @@ import CallEndIcon from '@mui/icons-material/CallEnd';
 import CallIcon from '@mui/icons-material/Call';
 import MicIcon from '@mui/icons-material/Mic';
 import MicNoneIcon from '@mui/icons-material/MicNone';
-import RecordVoiceOverIcon from '@mui/icons-material/RecordVoiceOver';
+import RecordVoiceOverTwoToneIcon from '@mui/icons-material/RecordVoiceOverTwoTone';
 
-import { useChatLLMDropdown } from '../chat/components/applayout/useLLMDropdown';
+import { ScrollToBottom } from '~/common/scroll-to-bottom/ScrollToBottom';
+import { ScrollToBottomButton } from '~/common/scroll-to-bottom/ScrollToBottomButton';
+import { useChatLLMDropdown } from '../chat/components/useLLMDropdown';
 
 import { EXPERIMENTAL_speakTextStream } from '~/modules/elevenlabs/elevenlabs.client';
 import { SystemPurposeId, SystemPurposes } from '../../data';
@@ -55,7 +57,7 @@ function CallMenuItems(props: {
     </MenuItem>
 
     <MenuItem onClick={handleChangeVoiceToggle}>
-      <ListItemDecorator><RecordVoiceOverIcon /></ListItemDecorator>
+      <ListItemDecorator><RecordVoiceOverTwoToneIcon /></ListItemDecorator>
       Change Voice
       <Switch checked={props.override} onChange={handleChangeVoiceToggle} sx={{ ml: 'auto' }} />
     </MenuItem>
@@ -222,8 +224,9 @@ export function Telephone(props: {
     responseAbortController.current = new AbortController();
     let finalText = '';
     let error: any | null = null;
-    llmStreamingChatGenerate(chatLLMId, callPrompt, null, null, responseAbortController.current.signal, (updatedMessage: Partial<DMessage>) => {
-      const text = updatedMessage.text?.trim();
+    setPersonaTextInterim('💭...');
+    llmStreamingChatGenerate(chatLLMId, callPrompt, null, null, responseAbortController.current.signal, ({ textSoFar }) => {
+      const text = textSoFar?.trim();
       if (text) {
         finalText = text;
         setPersonaTextInterim(text);
@@ -313,52 +316,62 @@ export function Telephone(props: {
 
     {/* Live Transcript, w/ streaming messages, audio indication, etc. */}
     {(isConnected || isEnded) && (
-      <Card variant='soft' sx={{
+      <Card variant='outlined' sx={{
         flexGrow: 1,
-        maxHeight: '24%',
-        minHeight: '15%',
+        maxHeight: '28%',
+        minHeight: '20%',
         width: '100%',
 
         // style
-        backgroundColor: 'background.surface',
+        // backgroundColor: 'background.surface',
         borderRadius: 'lg',
-        boxShadow: 'sm',
+        // boxShadow: 'sm',
 
         // children
-        display: 'flex', flexDirection: 'column-reverse',
-        overflow: 'auto',
+        padding: 0, // move this to the ScrollToBottom component
       }}>
 
-        {/* Messages in reverse order, for auto-scroll from the bottom */}
-        <Box sx={{ display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
+        <ScrollToBottom stickToBottomInitial>
 
-          {/* Listening... */}
-          {isRecording && (
-            <CallMessage
-              text={<>{speechInterim?.transcript ? speechInterim.transcript + ' ' : ''}<i>{speechInterim?.interimTranscript}</i></>}
-              variant={isRecordingSpeech ? 'solid' : 'outlined'}
-              role='user'
-            />
-          )}
+          <Box sx={{ minHeight: '100%', p: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
 
-          {/* Persona streaming text... */}
-          {!!personaTextInterim && (
-            <CallMessage
-              text={personaTextInterim}
-              variant='solid' color='neutral'
-              role='assistant'
-            />
-          )}
+            {/* Call Messages [] */}
+            {callMessages.map((message) =>
+              <CallMessage
+                key={message.id}
+                text={message.text}
+                variant={message.role === 'assistant' ? 'solid' : 'soft'}
+                color={message.role === 'assistant' ? 'neutral' : 'primary'}
+                role={message.role}
+              />,
+            )}
 
-          {/* Messages (last 6 messages, in reverse order) */}
-          {callMessages.slice(-6).reverse().map((message) =>
-            <CallMessage
-              key={message.id}
-              text={message.text}
-              variant={message.role === 'assistant' ? 'solid' : 'soft'} color='neutral'
-              role={message.role} />,
-          )}
-        </Box>
+            {/* Persona streaming text... */}
+            {!!personaTextInterim && (
+              <CallMessage
+                text={personaTextInterim}
+                variant='outlined'
+                color='neutral'
+                role='assistant'
+              />
+            )}
+
+            {/* Listening... */}
+            {isRecording && (
+              <CallMessage
+                text={<>{speechInterim?.transcript.trim() || null}{speechInterim?.interimTranscript.trim() ? <i> {speechInterim.interimTranscript}</i> : null}</>}
+                variant={(isRecordingSpeech || !!speechInterim?.transcript) ? 'soft' : 'outlined'}
+                color='primary'
+                role='user'
+              />
+            )}
+
+          </Box>
+
+          {/* Visibility and actions are handled via Context */}
+          <ScrollToBottomButton />
+
+        </ScrollToBottom>
       </Card>
     )}
 
@@ -371,11 +384,15 @@ export function Telephone(props: {
 
       {/* [Calling] Hang / PTT (mute not enabled yet) */}
       {isConnected && <CallButton Icon={CallEndIcon} text='Hang up' color='danger' variant='soft' onClick={handleCallStop} />}
-      {isConnected && (pushToTalk
-          ? <CallButton Icon={MicIcon} onClick={toggleRecording}
-                        text={isRecordingSpeech ? 'Listening...' : isRecording ? 'Listening' : 'Push To Talk'}
-                        variant={isRecordingSpeech ? 'solid' : isRecording ? 'soft' : 'outlined'} sx={!isRecording ? { backgroundColor: 'background.surface' } : undefined} />
-          : null
+      {isConnected && (pushToTalk ? (
+          <CallButton
+            Icon={MicIcon} onClick={toggleRecording}
+            text={isRecordingSpeech ? 'Listening...' : isRecording ? 'Listening' : 'Push To Talk'}
+            variant={isRecordingSpeech ? 'solid' : isRecording ? 'soft' : 'outlined'}
+            color='primary'
+            sx={!isRecording ? { backgroundColor: 'background.surface' } : undefined}
+          />
+        ) : null
         // <CallButton disabled={true} Icon={MicOffIcon} onClick={() => setMicMuted(muted => !muted)}
         //               text={micMuted ? 'Muted' : 'Mute'}
         //               color={micMuted ? 'warning' : undefined} variant={micMuted ? 'solid' : 'outlined'} />

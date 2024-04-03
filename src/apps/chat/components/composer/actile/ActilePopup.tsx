@@ -21,7 +21,11 @@ export function ActilePopup(props: {
   const hasAnyIcon = props.items.some(item => !!item.Icon);
 
   return (
-    <CloseableMenu open anchorEl={props.anchorEl} onClose={props.onClose} noTopPadding noBottomPadding sx={{ minWidth: 320 }}>
+    <CloseableMenu
+      noTopPadding noBottomPadding
+      open anchorEl={props.anchorEl} onClose={props.onClose}
+      sx={{ minWidth: 320 }}
+    >
 
       {!!props.title && (
         <Sheet variant='soft' sx={{ p: 1, borderBottom: '1px solid', borderBottomColor: 'neutral.softActiveBg' }}>
@@ -45,12 +49,12 @@ export function ActilePopup(props: {
           const labelNormal = item.label.slice(props.activePrefixLength);
           return (
             <ListItem
-              key={item.id}
+              key={item.key}
               variant={isActive ? 'soft' : undefined}
               color={isActive ? 'primary' : undefined}
               onClick={() => props.onItemClick(item)}
             >
-              <ListItemButton>
+              <ListItemButton color='primary'>
                 {hasAnyIcon && (
                   <ListItemDecorator>
                     {item.Icon ? <item.Icon /> : null}
@@ -60,7 +64,7 @@ export function ActilePopup(props: {
 
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography level='title-sm' color={isActive ? 'primary' : undefined}>
-                      <span style={{ fontWeight: 600, textDecoration: 'underline' }}>{labelBold}</span>{labelNormal}
+                      <span style={{ textDecoration: 'underline' }}><b>{labelBold}</b></span>{labelNormal}
                     </Typography>
                     {item.argument && <Typography level='body-sm'>
                       {item.argument}

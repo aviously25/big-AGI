@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 
 import { createTRPCRouter, publicProcedure } from '~/server/api/trpc.server';
 import { env } from '~/server/env.mjs';
-import { fetchJsonOrTRPCError } from '~/server/api/trpc.serverutils';
+import { fetchJsonOrTRPCError } from '~/server/api/trpc.router.fetchers';
 
 import { t2iCreateImagesOutputSchema } from '~/modules/t2i/t2i.server.types';
 
@@ -11,12 +11,12 @@ import { Brand } from '~/common/app.config';
 import { fixupHost } from '~/common/util/urlUtils';
 
 import { OpenAIWire, WireOpenAICreateImageOutput, wireOpenAICreateImageOutputSchema, WireOpenAICreateImageRequest } from './openai.wiretypes';
+import { azureModelToModelDescription, groqModelToModelDescription, lmStudioModelToModelDescription, localAIModelToModelDescription, mistralModelsSort, mistralModelToModelDescription, oobaboogaModelToModelDescription, openAIModelToModelDescription, openRouterModelFamilySortFn, openRouterModelToModelDescription, perplexityAIModelDescriptions, perplexityAIModelSort, togetherAIModelsToModelDescriptions } from './models.data';
 import { llmsChatGenerateWithFunctionsOutputSchema, llmsListModelsOutputSchema, ModelDescriptionSchema } from '../llm.server.types';
-import { lmStudioModelToModelDescription, localAIModelToModelDescription, mistralModelsSort, mistralModelToModelDescription, oobaboogaModelToModelDescription, openAIModelToModelDescription, openRouterModelFamilySortFn, openRouterModelToModelDescription, togetherAIModelsToModelDescriptions } from './models.data';
-
+import { wilreLocalAIModelsApplyOutputSchema, wireLocalAIModelsAvailableOutputSchema, wireLocalAIModelsListOutputSchema } from './localai.wiretypes';
 
 const openAIDialects = z.enum([
-  'azure', 'lmstudio', 'localai', 'mistral', 'oobabooga', 'openai', 'openrouter', 'togetherai',
+  'azure', 'groq', 'lmstudio', 'localai', 'mistral', 'oobabooga', 'openai', 'openrouter', 'perplexity', 'togetherai',
 ]);
 
 export const openAIAccessSchema = z.object({
@@ -72,12 +72,13 @@ const chatGenerateWithFunctionsInputSchema = z.object({
 
 const createImagesInputSchema = z.object({
   access: openAIAccessSchema,
-  request: z.object({
+  // for this object sync with <> wireOpenAICreateImageRequestSchema
+  config: z.object({
     prompt: z.string(),
     count: z.number().min(1),
-    model: z.enum(['dall-e-2', 'dall-e-3']),
+    model: z.enum(['dall-e-2', 'dall-e-3' /*, 'stablediffusion' for [LocalAI] */]),
     quality: z.enum(['standard', 'hd']),
-    asUrl: z.boolean(), // if false, returns a base64 encoded data Url
+    responseFormat: z.enum(['url', 'b64_json']), /* udpated to directly match OpenAI's formats - shall have an intermediate representation instead? */
     size: z.enum(['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792']),
     style: z.enum(['natural', 'vivid']),
   }),
@@ -122,7 +123,7 @@ export const llmOpenAIRouter = createTRPCRouter({
           .filter(m => m.model.includes('gpt'))
           .map((model): ModelDescriptionSchema => {
             const { id: deploymentRef, model: openAIModelId } = model;
-            const { id: _deleted, label, ...rest } = openAIModelToModelDescription(openAIModelId, model.created_at, model.updated_at);
+            const { id: _deleted, label, ...rest } = azureModelToModelDescription(deploymentRef, openAIModelId, model.created_at, model.updated_at);
             return {
               id: deploymentRef,
               label: `${label} (${deploymentRef})`,
@@ -131,6 +132,11 @@ export const llmOpenAIRouter = createTRPCRouter({
           });
         return { models };
       }
+
+
+      // [Perplexity]: there's no API for models listing (upstream: https://docs.perplexity.ai/discuss/65cf7fd19ac9a5002e8f1341)
+      if (access.dialect === 'perplexity')
+        return { models: perplexityAIModelDescriptions().sort(perplexityAIModelSort) };
 
 
       // [non-Azure]: fetch openAI-style for all but Azure (will be then used in each dialect)
@@ -153,6 +159,11 @@ export const llmOpenAIRouter = createTRPCRouter({
 
       // every dialect has a different way to enumerate models - we execute the mapping on the server side
       switch (access.dialect) {
+
+        case 'groq':
+          models = openAIModels
+            .map(groqModelToModelDescription);
+          break;
 
         case 'lmstudio':
           models = openAIModels
@@ -190,8 +201,18 @@ export const llmOpenAIRouter = createTRPCRouter({
 
             // custom OpenAI sort
             .sort((a, b) => {
-              // due to model name, sorting doesn't require special cases anymore
-              return b.label.localeCompare(a.label);
+
+              // fix the OpenAI model names to be chronologically sorted
+              function remapReleaseDate(id: string): string {
+                return id
+                  .replace('0314', '230314')
+                  .replace('0613', '230613')
+                  .replace('1106', '231106')
+                  .replace('0125', '240125');
+              }
+
+              // due to using by-label, sorting doesn't require special cases anymore
+              return remapReleaseDate(b.label).localeCompare(remapReleaseDate(a.label));
 
               // move models with the link emoji (🔗) to the bottom
               // const aLink = a.label.includes('🔗');
@@ -258,30 +279,35 @@ export const llmOpenAIRouter = createTRPCRouter({
         : parseChatGenerateOutput(message as OpenAIWire.ChatCompletion.ResponseMessage, finish_reason);
     }),
 
-  /* [OpenAI] images/generations */
+  /* [OpenAI/LocalAI] images/generations */
   createImages: publicProcedure
     .input(createImagesInputSchema)
     .output(t2iCreateImagesOutputSchema)
-    .mutation(async ({ input: { access, request } }) => {
+    .mutation(async ({ input: { access, config } }) => {
 
       // Validate input
-      if (request.model === 'dall-e-3' && request.count > 1)
+      if (config.model === 'dall-e-3' && config.count > 1)
         throw new TRPCError({ code: 'BAD_REQUEST', message: `[OpenAI Issue] dall-e-3 model does not support more than 1 image` });
+
+      // images/generations request body
+      const requestBody: WireOpenAICreateImageRequest = {
+        prompt: config.prompt,
+        model: config.model,
+        n: config.count,
+        quality: config.quality,
+        response_format: config.responseFormat,
+        size: config.size,
+        style: config.style,
+        user: 'big-AGI',
+      };
+
+      // [LocalAI] Fix: LocalAI does not want the 'response_format' field
+      if (access.dialect === 'localai')
+        delete requestBody.response_format;
 
       // create 1 image (dall-e-3 won't support more than 1, so better transfer the burden to the client)
       const wireOpenAICreateImageOutput = await openaiPOST<WireOpenAICreateImageOutput, WireOpenAICreateImageRequest>(
-        access, null,
-        {
-          prompt: request.prompt,
-          model: request.model,
-          n: request.count,
-          quality: request.quality,
-          response_format: request.asUrl ? 'url' : 'b64_json',
-          size: request.size,
-          style: request.style,
-          user: 'big-agi',
-        },
-        '/v1/images/generations',
+        access, null, requestBody, '/v1/images/generations',
       );
 
       // expect a single image and as URL
@@ -291,7 +317,7 @@ export const llmOpenAIRouter = createTRPCRouter({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `[OpenAI Issue] Expected a url, got a b64_json (which is not implemented yet)` });
         return {
           imageUrl: image.url,
-          altText: image.revised_prompt || request.prompt,
+          altText: image.revised_prompt || config.prompt,
         };
       });
     }),
@@ -316,13 +342,51 @@ export const llmOpenAIRouter = createTRPCRouter({
       }
     }),
 
+
+  /// Dialect-specific procedures ///
+
+  /* [LocalAI] List all Model Galleries */
+  dialectLocalAI_galleryModelsAvailable: publicProcedure
+    .input(listModelsInputSchema)
+    .query(async ({ input: { access } }) => {
+      const wireLocalAIModelsAvailable = await openaiGET(access, '/models/available');
+      return wireLocalAIModelsAvailableOutputSchema.parse(wireLocalAIModelsAvailable);
+    }),
+
+  /* [LocalAI] Download a model from a Model Gallery */
+  dialectLocalAI_galleryModelsApply: publicProcedure
+    .input(z.object({
+      access: openAIAccessSchema,
+      galleryName: z.string(),
+      modelName: z.string(),
+    }))
+    .mutation(async ({ input: { access, galleryName, modelName } }) => {
+      const galleryModelId = `${galleryName}@${modelName}`;
+      const wireLocalAIModelApply = await openaiPOST(access, null, { id: galleryModelId }, '/models/apply');
+      return wilreLocalAIModelsApplyOutputSchema.parse(wireLocalAIModelApply);
+    }),
+
+  /* [LocalAI] Poll for a Model download Job status */
+  dialectLocalAI_galleryModelsJob: publicProcedure
+    .input(z.object({
+      access: openAIAccessSchema,
+      jobId: z.string(),
+    }))
+    .query(async ({ input: { access, jobId } }) => {
+      const wireLocalAIModelsJobs = await openaiGET(access, `/models/jobs/${jobId}`);
+      return wireLocalAIModelsListOutputSchema.parse(wireLocalAIModelsJobs);
+    }),
+
 });
 
 
 const DEFAULT_HELICONE_OPENAI_HOST = 'oai.hconeai.com';
+const DEFAULT_GROQ_HOST = 'https://api.groq.com/openai';
+const DEFAULT_LOCALAI_HOST = 'http://127.0.0.1:8080';
 const DEFAULT_MISTRAL_HOST = 'https://api.mistral.ai';
 const DEFAULT_OPENAI_HOST = 'api.openai.com';
 const DEFAULT_OPENROUTER_HOST = 'https://openrouter.ai/api';
+const DEFAULT_PERPLEXITY_HOST = 'https://api.perplexity.ai';
 const DEFAULT_TOGETHERAI_HOST = 'https://api.together.xyz';
 
 export function openAIAccess(access: OpenAIAccessSchema, modelRefId: string | null, apiPath: string): { headers: HeadersInit, url: string } {
@@ -354,7 +418,6 @@ export function openAIAccess(access: OpenAIAccessSchema, modelRefId: string | nu
 
 
     case 'lmstudio':
-    case 'localai':
     case 'oobabooga':
     case 'openai':
       const oaiKey = access.oaiKey || env.OPENAI_API_KEY || '';
@@ -407,6 +470,33 @@ export function openAIAccess(access: OpenAIAccessSchema, modelRefId: string | nu
         url: oaiHost + apiPath,
       };
 
+    case 'groq':
+      const groqKey = access.oaiKey || env.GROQ_API_KEY || '';
+      const groqHost = fixupHost(access.oaiHost || DEFAULT_GROQ_HOST, apiPath);
+      if (!groqKey)
+        throw new Error('Missing Groq API Key. Add it on the UI (Models Setup) or server side (your deployment).');
+
+      return {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${groqKey}`,
+        },
+        url: groqHost + apiPath,
+      };
+
+
+    case 'localai':
+      const localAIKey = access.oaiKey || env.LOCALAI_API_KEY || '';
+      let localAIHost = fixupHost(access.oaiHost || env.LOCALAI_API_HOST || DEFAULT_LOCALAI_HOST, apiPath);
+      return {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localAIKey && { Authorization: `Bearer ${localAIKey}` }),
+        },
+        url: localAIHost + apiPath,
+      };
+
 
     case 'mistral':
       // https://docs.mistral.ai/platform/client
@@ -437,6 +527,25 @@ export function openAIAccess(access: OpenAIAccessSchema, modelRefId: string | nu
         },
         url: orHost + apiPath,
       };
+
+    case 'perplexity':
+      const perplexityKey = access.oaiKey || env.PERPLEXITY_API_KEY || '';
+      const perplexityHost = fixupHost(access.oaiHost || DEFAULT_PERPLEXITY_HOST, apiPath);
+      if (!perplexityKey || !perplexityHost)
+        throw new Error('Missing Perplexity API Key or Host. Add it on the UI (Models Setup) or server side (your deployment).');
+
+      if (apiPath.startsWith('/v1'))
+        apiPath = apiPath.replace('/v1', '');
+
+      return {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${perplexityKey}`,
+        },
+        url: perplexityHost + apiPath,
+      };
+
 
     case 'togetherai':
       const togetherKey = access.oaiKey || env.TOGETHERAI_API_KEY || '';

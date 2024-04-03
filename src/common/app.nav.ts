@@ -1,18 +1,17 @@
 import type { FunctionComponent } from 'react';
 
 // App icons
-import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined';
+import AccountTreeTwoToneIcon from '@mui/icons-material/AccountTreeTwoTone';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import CallIcon from '@mui/icons-material/Call';
 import CallOutlinedIcon from '@mui/icons-material/CallOutlined';
 import Diversity2Icon from '@mui/icons-material/Diversity2';
-import Diversity2OutlinedIcon from '@mui/icons-material/Diversity2Outlined';
 import EventNoteIcon from '@mui/icons-material/EventNote';
 import EventNoteOutlinedIcon from '@mui/icons-material/EventNoteOutlined';
-import FormatPaintIcon from '@mui/icons-material/FormatPaint';
 import FormatPaintOutlinedIcon from '@mui/icons-material/FormatPaintOutlined';
+import FormatPaintTwoToneIcon from '@mui/icons-material/FormatPaintTwoTone';
 import ImageIcon from '@mui/icons-material/Image';
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined';
 import IosShareIcon from '@mui/icons-material/IosShare';
@@ -23,15 +22,15 @@ import WorkspacesIcon from '@mui/icons-material/Workspaces';
 import WorkspacesOutlinedIcon from '@mui/icons-material/WorkspacesOutlined';
 // Link icons
 import GitHubIcon from '@mui/icons-material/GitHub';
-import { DiscordIcon } from '~/common/components/icons/DiscordIcon';
+import { DiscordIcon } from '~/common/components/icons/3rdparty/DiscordIcon';
 // Modal icons
 import BuildCircleIcon from '@mui/icons-material/BuildCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
 
 
 import { Brand } from '~/common/app.config';
+import { ChatBeamIcon } from '~/common/components/icons/ChatBeamIcon';
 import { hasNoChatLinkItems } from '~/modules/trade/link/store-link';
-import { useUXLabsStore } from '~/common/state/store-ux-labs';
 
 
 // enable to show all items, for layout development
@@ -62,6 +61,7 @@ export interface NavItemApp extends ItemBase {
   hideNav?: boolean
     | (() => boolean),    // set to hide the Nav bar (note: must have a way to navigate back)
   fullWidth?: boolean,    // set to true to override the user preference
+  isDev?: boolean,        // show a 'dev mode' badge
   _delete?: boolean,      // delete from the UI
 }
 
@@ -110,12 +110,13 @@ export const navItems: {
       name: 'Draw',
       barTitle: 'Generate Images',
       icon: FormatPaintOutlinedIcon,
-      iconActive: FormatPaintIcon,
+      iconActive: FormatPaintTwoToneIcon,
       type: 'app',
       route: '/draw',
       // hideOnMobile: true,
       hideDrawer: true,
-      hideIcon: () => !useUXLabsStore.getState().labsDrawing,
+      isDev: true,
+      _delete: true,
     },
     {
       name: 'Cortex',
@@ -123,14 +124,16 @@ export const navItems: {
       iconActive: AutoAwesomeIcon,
       type: 'app',
       route: '/cortex',
+      isDev: true,
       _delete: true,
     },
     {
       name: 'Patterns',
       icon: AccountTreeOutlinedIcon,
-      iconActive: AccountTreeIcon,
+      iconActive: AccountTreeTwoToneIcon,
       type: 'app',
       route: '/patterns',
+      isDev: true,
       _delete: true,
     },
     {
@@ -139,6 +142,9 @@ export const navItems: {
       iconActive: WorkspacesIcon,
       type: 'app',
       route: '/workspace',
+      hideDrawer: true,
+      hideOnMobile: true,
+      isDev: true,
       _delete: true,
     },
     // <-- divider here -->
@@ -150,11 +156,20 @@ export const navItems: {
     },
     {
       name: 'Personas',
-      icon: Diversity2OutlinedIcon,
-      iconActive: Diversity2Icon,
+      icon: Diversity2Icon, // was: Outlined.. but they look the same
+      // iconActive: Diversity2Icon,
       type: 'app',
       route: '/personas',
       hideBar: true,
+    },
+    {
+      name: 'Beam',
+      icon: ChatBeamIcon,
+      type: 'app',
+      route: '/dev/beam',
+      hideDrawer: true,
+      hideIcon: true,
+      isDev: true,
     },
     {
       name: 'Media Library',
@@ -162,6 +177,7 @@ export const navItems: {
       iconActive: ImageIcon,
       type: 'app',
       route: '/media',
+      isDev: true,
       _delete: true,
     },
     {

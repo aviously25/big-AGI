@@ -5,7 +5,7 @@ import { LLMOptionsOpenAI, ModelVendorOpenAI } from '../openai/openai.vendor';
 import { OpenAILLMOptions } from '../openai/OpenAILLMOptions';
 
 import { LMStudioSourceSetup } from './LMStudioSourceSetup';
-import { LMStudioIcon } from '~/common/components/icons/LMStudioIcon';
+import { LMStudioIcon } from '~/common/components/icons/vendors/LMStudioIcon';
 
 
 export interface SourceSetupLMStudio {
@@ -38,7 +38,7 @@ export const ModelVendorLMStudio: IModelVendor<SourceSetupLMStudio, OpenAIAccess
   }),
 
   // OpenAI transport ('lmstudio' dialect in 'access')
-  rpcUpdateModelsQuery: ModelVendorOpenAI.rpcUpdateModelsQuery,
+  rpcUpdateModelsOrThrow: ModelVendorOpenAI.rpcUpdateModelsOrThrow,
   rpcChatGenerateOrThrow: ModelVendorOpenAI.rpcChatGenerateOrThrow,
   streamingChatGenerateOrThrow: ModelVendorOpenAI.streamingChatGenerateOrThrow,
 };

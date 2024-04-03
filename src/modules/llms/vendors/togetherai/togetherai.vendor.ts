@@ -1,6 +1,4 @@
-import { backendCaps } from '~/modules/backend/state-backend';
-
-import { TogetherIcon } from '~/common/components/icons/TogetherIcon';
+import { TogetherIcon } from '~/common/components/icons/vendors/TogetherIcon';
 
 import type { IModelVendor } from '../IModelVendor';
 import type { OpenAIAccessSchema } from '../../server/openai/openai.router';
@@ -23,7 +21,7 @@ export const ModelVendorTogetherAI: IModelVendor<SourceSetupTogetherAI, OpenAIAc
   rank: 17,
   location: 'cloud',
   instanceLimit: 1,
-  hasBackendCap: () => backendCaps().hasLlmTogetherAI,
+  hasBackendCapKey: 'hasLlmTogetherAI',
 
   // components
   Icon: TogetherIcon,
@@ -68,7 +66,7 @@ export const ModelVendorTogetherAI: IModelVendor<SourceSetupTogetherAI, OpenAIAc
 
 
   // OpenAI transport ('togetherai' dialect in 'access')
-  rpcUpdateModelsQuery: ModelVendorOpenAI.rpcUpdateModelsQuery,
+  rpcUpdateModelsOrThrow: ModelVendorOpenAI.rpcUpdateModelsOrThrow,
   rpcChatGenerateOrThrow: ModelVendorOpenAI.rpcChatGenerateOrThrow,
   streamingChatGenerateOrThrow: ModelVendorOpenAI.streamingChatGenerateOrThrow,
 };
